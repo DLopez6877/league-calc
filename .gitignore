@@ -12,3 +12,7 @@ yarn-error.log*
 *.ntvs*
 *.njsproj
 *.sln
+
+#other
+members.json
+src/api-keys.js

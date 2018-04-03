@@ -1,45 +1,72 @@
 <template>
   <div id="App">
-    <h1>{{ msg }}</h1>
-    <label for="round">Round: </label>
-    <input id="round" v-model="round" type="number">
-    <hr>
-    <label for="availablePlayers">Select player:</label>
-    <input id="availablePlayers" class="form-control" type="text" placeholder="Type to search...">
-    <hr>
-    <typeahead v-model="model" target="#availablePlayers" :data="availablePlayers" item-key="last_name"/>
-    <div v-show="model.first_name">
-      <h2 v-show="!round">Oops.. select a round </h2>
-      <div v-show="model.first_name && round">
-        <h2>You selected {{model.first_name}} {{model.last_name}}</h2>
-        <p>Score for round {{round}}:</p>
-        <p v-show="!model.stats.scores[round]">No Points :(</p>
-        <p v-show="model.stats.scores[round]">{{model.stats.scores[round]}} points</p>
-      </div>
-    </div>
+    <nav-component></nav-component>
+    <calculator :players="players" :last-completed-round="lastCompletedRound"></calculator>
+    <matches :rounds="rounds" :current-round="currentRound"></matches>
+    <news></news>
   </div>
 </template>
 
 <script>
 import axios from 'axios'
-import {Typeahead} from 'uiv'
+import firebaseConfig from './api-keys'
+import Firebase from 'firebase'
+
+import mlsTeams from './mls_teams.js'
+
+import Calculator from './Calc.vue'
+import NavComponent from './Nav.vue'
+import Matches from './Matches.vue'
+import News from './News.vue'
+
+const app = Firebase.initializeApp(firebaseConfig);
+const db = app.database();
+let members = db.ref('members');
+const corsAnywhere = 'https://cors-anywhere.herokuapp.com/';
 
 export default {
   name: 'App',
-  components: {Typeahead},  
+  components: {
+    Calculator,
+    NavComponent,
+    Matches,
+    News
+  },
   data () {
     return {
-      model: {stats: {scores: ''}},
-      msg: 'FANTASY POINTS CALCULATOR',
-      availablePlayers: [],
-      scores: '',
-      round: ''
+      msg: 'FANTASY LEAGUE',     
+      players: [],
+      rounds: [],
+      currentRound: '',
+      lastCompletedRound: ''
     }
   },
-  mounted() {   
-    axios.get('https://fgp-data-us.s3.amazonaws.com/json/mls_mls/players.json?_=1521353744779').then(res => {
-        this.availablePlayers = res.data;
-      }).catch(err => console.log('err', err));
+  firebase: {
+    members: members
+  },
+  mounted() {
+    const vm = this;
+    //GET PLAYERS THEN CONCAT FULL NAME AND TRANSLATE TEAM ID'S
+    axios.get(corsAnywhere + 'https://fgp-data-us.s3.amazonaws.com/json/mls_mls/players.json?_=1521353744779').then(res => {
+      res.data.forEach( function (player) {
+        player.full_name = player.first_name + ' ' + player.last_name;
+        player.team = mlsTeams[player.squad_id];
+      });
+      this.players = res.data;
+    }).catch(err => console.log('err', err));
+
+    //GET ROUNDS
+    axios.get(corsAnywhere + 'https://fgp-data-us.s3.amazonaws.com/json/mls_mls/rounds.json?_=1521515434360').then(res => {
+        this.rounds = res.data;
+        res.data.forEach( function (round) {
+          if (round.status === "complete") {
+            vm.lastCompletedRound = round.id;
+            vm.currentRound = parseInt(round.id) + 1;
+          }
+        });
+    }).catch(err => console.log('err', err));
+
+    //GET LEAGUE MEMBERS
   }
 }
 </script>
